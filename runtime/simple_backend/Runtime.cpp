@@ -22,7 +22,7 @@
 #include <set>
 #include <vector>
 
-#ifdef DEBUG_RUNTIME
+#ifndef NDEBUG
 #include <chrono>
 #endif
 
@@ -31,7 +31,7 @@
 #include "LibcWrappers.h"
 #include "Shadow.h"
 
-#ifdef DEBUG_RUNTIME
+#ifndef NDEBUG
 // Helper to print pointers properly.
 #define P(ptr) reinterpret_cast<void *>(ptr)
 #endif
@@ -62,7 +62,9 @@ Z3_solver g_solver; // TODO make thread-local
 // Some global constants for efficiency.
 Z3_ast g_null_pointer, g_true, g_false;
 
-#ifdef DEBUG_RUNTIME
+FILE *g_log = stdout;
+
+#ifndef NDEBUG
 [[maybe_unused]] void dump_known_regions() {
   std::cout << "Known regions:" << std::endl;
   for (const auto &[page, shadow] : g_shadow_pages) {
@@ -107,7 +109,7 @@ void _sym_initialize(void) {
   if (g_initialized.test_and_set())
     return;
 
-#ifdef DEBUG_RUNTIME
+#ifndef NDEBUG
   std::cout << "Initializing symbolic runtime" << std::endl;
 #endif
 
@@ -122,7 +124,7 @@ void _sym_initialize(void) {
   g_context = Z3_mk_context_rc(cfg);
   Z3_del_config(cfg);
 
-#ifdef DEBUG_RUNTIME
+#ifndef NDEBUG
   Z3_set_error_handler(g_context, handle_z3_error);
 #endif
 
@@ -141,6 +143,12 @@ void _sym_initialize(void) {
   Z3_inc_ref(g_context, g_true);
   g_false = Z3_mk_false(g_context);
   Z3_inc_ref(g_context, g_false);
+
+  if (g_config.logFile.empty()) {
+    g_log = stdout;
+  } else {
+    g_log = fopen(g_config.logFile.c_str(), "w");
+  }
 }
 
 Z3_ast _sym_build_integer(uint64_t value, uint8_t bits) {
@@ -432,17 +440,18 @@ void _sym_push_path_constraint(Z3_ast constraint, int taken,
 
   Z3_solver_push(g_context, g_solver);
   Z3_solver_assert(g_context, g_solver, taken ? not_constraint : constraint);
-  printf("Trying to solve:\n%s\n", Z3_solver_to_string(g_context, g_solver));
+  fprintf(g_log, "Trying to solve:\n%s\n",
+          Z3_solver_to_string(g_context, g_solver));
 
   Z3_lbool feasible = Z3_solver_check(g_context, g_solver);
   if (feasible == Z3_L_TRUE) {
     Z3_model model = Z3_solver_get_model(g_context, g_solver);
     Z3_model_inc_ref(g_context, model);
-    printf("Found diverging input:\n%s\n",
+    fprintf(g_log, "Found diverging input:\n%s\n",
            Z3_model_to_string(g_context, model));
     Z3_model_dec_ref(g_context, model);
   } else {
-    printf("Can't find a diverging input at this point\n");
+    fprintf(g_log, "Can't find a diverging input at this point\n");
   }
 
   Z3_solver_pop(g_context, g_solver, 1);
@@ -502,7 +511,7 @@ void _sym_collect_garbage() {
   if (allocatedExpressions.size() < g_config.garbageCollectionThreshold)
     return;
 
-#ifdef DEBUG_RUNTIME
+#ifndef NDEBUG
   auto start = std::chrono::high_resolution_clock::now();
   auto startSize = allocatedExpressions.size();
 #endif
@@ -517,7 +526,7 @@ void _sym_collect_garbage() {
     }
   }
 
-#ifdef DEBUG_RUNTIME
+#ifndef NDEBUG
   auto end = std::chrono::high_resolution_clock::now();
   auto endSize = allocatedExpressions.size();
 

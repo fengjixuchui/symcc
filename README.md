@@ -106,8 +106,16 @@ docs/Fuzzing.txt).
 ## Documentation
 
 The directory [docs](docs) contains documentation on several internal aspects of
-SymCC, as well as building C++ code, compiling 32-bit binaries on a 64-bit host,
-and running SymCC with a fuzzer.
+SymCC, as well as [building C++ code](docs/C++.txt), [compiling 32-bit binaries
+on a 64-bit host](docs/32-bit.txt), and [running SymCC with a
+fuzzer](docs/Fuzzing.txt). There is also a [list of all configuration
+options](docs/Configuration.txt).
+
+If you're interested in the research paper that we wrote about SymCC, have a
+look at our group's
+[website](http://www.s3.eurecom.fr/tools/symbolic_execution/symcc.html). It also
+contains detailed instructions to replicate our experiments, as well as the raw
+results that we obtained.
 
 
 ## Building a Docker image
@@ -174,6 +182,9 @@ To cite SymCC in scientific work, please use the following BibTeX:
   month =        August,
 }
 ```
+
+More information on the paper is available
+[here](http://www.s3.eurecom.fr/tools/symbolic_execution/symcc.html).
 
 
 ## License
