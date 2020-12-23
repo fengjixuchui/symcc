@@ -17,7 +17,7 @@
 set(QSYM_SOURCE_DIR "qsym/qsym/pintool")
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/expr__gen.cpp
-  COMMAND python gen_expr.py ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND python2 gen_expr.py ${CMAKE_CURRENT_BINARY_DIR}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${QSYM_SOURCE_DIR}/codegen
   COMMENT "Generating Qsym's expr__gen.cpp"
   VERBATIM
@@ -26,7 +26,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/expr__gen.cpp
   ${QSYM_SOURCE_DIR}/codegen/gen_expr.py)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/expr_builder__gen.cpp
-  COMMAND python gen_expr_builder.py ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND python2 gen_expr_builder.py ${CMAKE_CURRENT_BINARY_DIR}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${QSYM_SOURCE_DIR}/codegen
   COMMENT "Generating Qsym's expr__gen.cpp"
   VERBATIM
@@ -39,7 +39,21 @@ add_definitions(${LLVM_DEFINITIONS})
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 
 # Qsym doesn't work with old versions of Z3
-find_package(Z3 4.5 REQUIRED config)
+find_package(Z3 4.5 CONFIG)
+if (NOT Z3_FOUND)
+  if (NOT Z3_TRUST_SYSTEM_VERSION)
+    message(FATAL_ERROR "Couldn't locate Z3. \
+If you want me to trust that a suitable version is available nonetheless, \
+configure CMake with -DZ3_TRUST_SYSTEM_VERSION=on (see also docs/Configuration.txt).")
+  else()
+    if (EXISTS "/usr/include/z3")
+      set(Z3_CXX_INCLUDE_DIRS "/usr/include/z3")
+    else()
+      set(Z3_CXX_INCLUDE_DIRS)
+    endif()
+    set(Z3_LIBRARIES "z3")
+  endif()
+endif()
 
 add_library(SymRuntime SHARED
   ${CMAKE_CURRENT_BINARY_DIR}/expr__gen.cpp
@@ -68,4 +82,15 @@ target_include_directories(SymRuntime SYSTEM PRIVATE
 # We need to get the LLVM support component for llvm::APInt.
 llvm_map_components_to_libnames(QSYM_LLVM_DEPS support)
 
-target_link_libraries(SymRuntime stdc++fs ${Z3_LIBRARIES} ${QSYM_LLVM_DEPS})
+target_link_libraries(SymRuntime ${Z3_LIBRARIES} ${QSYM_LLVM_DEPS})
+
+# We use std::filesystem, which has been added in C++17. Before its official
+# inclusion in the standard library, Clang shipped the feature first in
+# libc++experimental and later in libc++fs; GCC used to require libstdc++fs. We
+# make no attempt to support those older compiler versions, with one exception:
+# some current LTS distributions ship a GCC that requires libstdc++fs for
+# std::filesystem - we catch this case in order to enable users of such systems
+# to build with the default compiler.
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  target_link_libraries(SymRuntime stdc++fs)
+endif()

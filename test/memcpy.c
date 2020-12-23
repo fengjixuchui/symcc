@@ -13,14 +13,17 @@
 // SymCC. If not, see <https://www.gnu.org/licenses/>.
 
 // RUN: %symcc -O2 %s -o %t
-// RUN: echo -ne "\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00" | %t 2>&1 | %filecheck %s
+// RUN: echo -ne "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03" | %t 2>&1 | %filecheck %s
 //
 // Test that we generate alternative inputs for the parameters to memcpy (which
 // should assert that the concept works for other functions as well). Also, make
 // sure that we handle the different parameter sizes for mmap correctly.
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <arpa/inet.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -31,23 +34,26 @@ int main(int argc, char *argv[]) {
   int dest_offset;
   if (read(STDIN_FILENO, &dest_offset, sizeof(dest_offset)) !=
       sizeof(dest_offset)) {
-    printf("Failed to read dest_offset\n");
+    fprintf(stderr, "Failed to read dest_offset\n");
     return -1;
   }
+  dest_offset = ntohl(dest_offset);
   int src_offset;
   if (read(STDIN_FILENO, &src_offset, sizeof(src_offset)) !=
       sizeof(src_offset)) {
-    printf("Failed to read src_offset\n");
+    fprintf(stderr, "Failed to read src_offset\n");
     return -1;
   }
+  src_offset = ntohl(src_offset);
   int length;
   if (read(STDIN_FILENO, &length, sizeof(length)) != sizeof(length)) {
-    printf("Failed to read length\n");
+    fprintf(stderr, "Failed to read length\n");
     return -1;
   }
+  length = ntohl(length);
 
   memcpy(values_copy + dest_offset, values + src_offset, length);
-  printf("%d\n", values_copy[0]);
+  fprintf(stderr, "%d\n", values_copy[0]);
   // SIMPLE: Trying to solve
   // SIMPLE: Found diverging input
   // SIMPLE: stdin{{[0-3]}}

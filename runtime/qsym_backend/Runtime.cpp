@@ -68,7 +68,7 @@ namespace qsym {
 ExprBuilder *g_expr_builder;
 Solver *g_solver;
 CallStackManager g_call_stack_manager;
-z3::context g_z3_context;
+z3::context *g_z3_context;
 
 } // namespace qsym
 
@@ -121,8 +121,13 @@ void _sym_initialize(void) {
 
   loadConfig();
   initLibcWrappers();
-  if (g_config.fullyConcrete)
+  std::cerr << "This is SymCC running with the QSYM backend" << std::endl;
+  if (g_config.fullyConcrete) {
+    std::cerr
+        << "Performing fully concrete execution (i.e., without symbolic input)"
+        << std::endl;
     return;
+  }
 
   // Check the output directory
   if (!fs::exists(g_config.outputDir) ||
@@ -135,7 +140,7 @@ void _sym_initialize(void) {
 
   // Qsym requires the full input in a file
   if (g_config.inputFile.empty()) {
-    std::cout << "Reading program input until EOF (use Ctrl+D in a terminal)..."
+    std::cerr << "Reading program input until EOF (use Ctrl+D in a terminal)..."
               << std::endl;
     std::istreambuf_iterator<char> in_begin(std::cin), in_end;
     std::vector<char> inputData(in_begin, in_end);
@@ -146,10 +151,10 @@ void _sym_initialize(void) {
     inputFile.close();
 
 #ifdef DEBUG_RUNTIME
-    std::cout << "Loaded input:" << std::endl;
+    std::cerr << "Loaded input:" << std::endl;
     std::copy(inputData.begin(), inputData.end(),
-              std::ostreambuf_iterator<char>(std::cout));
-    std::cout << std::endl;
+              std::ostreambuf_iterator<char>(std::cerr));
+    std::cerr << std::endl;
 #endif
 
     atexit(deleteInputFile);
@@ -162,8 +167,11 @@ void _sym_initialize(void) {
     }
   } else {
     inputFileName = g_config.inputFile;
+    std::cerr << "Making data read from " << inputFileName << " as symbolic"
+              << std::endl;
   }
 
+  g_z3_context = new z3::context{};
   g_solver =
       new Solver(inputFileName, g_config.outputDir, g_config.aflCoverageMap);
   g_expr_builder = g_config.pruning ? PruneExprBuilder::create()
@@ -407,7 +415,7 @@ void _sym_collect_garbage() {
 #ifdef DEBUG_RUNTIME
   auto end = std::chrono::high_resolution_clock::now();
 
-  std::cout << "After garbage collection: " << allocatedExpressions.size()
+  std::cerr << "After garbage collection: " << allocatedExpressions.size()
             << " expressions remain" << std::endl
             << "\t(collection took "
             << std::chrono::duration_cast<std::chrono::milliseconds>(end -

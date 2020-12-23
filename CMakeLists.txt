@@ -15,6 +15,53 @@
 cmake_minimum_required(VERSION 3.5)
 project(SymbolicCompiler)
 
+option(QSYM_BACKEND "Use the Qsym backend instead of our own" OFF)
+option(TARGET_32BIT "Make the compiler work correctly with -m32" OFF)
+
+# We need to build the runtime as an external project because CMake otherwise
+# doesn't allow us to build it twice with different options (one 32-bit version
+# and one 64-bit variant).
+include(ExternalProject)
+
+set(SYM_RUNTIME_BUILD_ARGS
+  -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+  -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+  -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+  -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+  -DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS}
+  -DQSYM_BACKEND=${QSYM_BACKEND}
+  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+  -DZ3_TRUST_SYSTEM_VERSION=${Z3_TRUST_SYSTEM_VERSION})
+
+ExternalProject_Add(SymRuntime
+  SOURCE_DIR ${CMAKE_SOURCE_DIR}/runtime
+  CMAKE_ARGS
+  ${SYM_RUNTIME_BUILD_ARGS}
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}
+  -DZ3_DIR=${Z3_DIR}
+  -DLLVM_DIR=${LLVM_DIR}
+  INSTALL_COMMAND ""
+  BUILD_ALWAYS TRUE)
+
+ExternalProject_Get_Property(SymRuntime BINARY_DIR)
+set(SYM_RUNTIME_DIR ${BINARY_DIR})
+
+if (${TARGET_32BIT})
+  ExternalProject_Add(SymRuntime32
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/runtime
+    CMAKE_ARGS
+    ${SYM_RUNTIME_BUILD_ARGS}
+    -DCMAKE_C_FLAGS="-m32"
+    -DCMAKE_CXX_FLAGS="-m32"
+    -DZ3_DIR=${Z3_32BIT_DIR}
+    -DLLVM_DIR=${LLVM_32BIT_DIR}
+    INSTALL_COMMAND ""
+    BUILD_ALWAYS TRUE)
+
+  ExternalProject_Get_Property(SymRuntime32 BINARY_DIR)
+  set(SYM_RUNTIME_32BIT_DIR ${BINARY_DIR})
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -46,47 +93,6 @@ add_library(Symbolize MODULE
   compiler/Main.cpp)
 if (NOT LLVM_ENABLE_RTTI)
   set_target_properties(Symbolize PROPERTIES COMPILE_FLAGS "-fno-rtti")
-endif()
-
-option(QSYM_BACKEND "Use the Qsym backend instead of our own" OFF)
-option(TARGET_32BIT "Make the compiler work correctly with -m32" OFF)
-
-# We need to build the runtime as an external project because CMake otherwise
-# doesn't allow us to build it twice with different options (one 32-bit version
-# and one 64-bit variant).
-include(ExternalProject)
-
-set(SYM_RUNTIME_BUILD_ARGS
-  -DQSYM_BACKEND=${QSYM_BACKEND}
-  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
-
-ExternalProject_Add(SymRuntime
-  SOURCE_DIR ${CMAKE_SOURCE_DIR}/runtime
-  CMAKE_ARGS
-  ${SYM_RUNTIME_BUILD_ARGS}
-  -DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}
-  -DZ3_DIR=${Z3_DIR}
-  -DLLVM_DIR=${LLVM_DIR}
-  INSTALL_COMMAND ""
-  BUILD_ALWAYS TRUE)
-
-ExternalProject_Get_Property(SymRuntime BINARY_DIR)
-set(SYM_RUNTIME_DIR ${BINARY_DIR})
-
-if (${TARGET_32BIT})
-  ExternalProject_Add(SymRuntime32
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/runtime
-    CMAKE_ARGS
-    ${SYM_RUNTIME_BUILD_ARGS}
-    -DCMAKE_C_FLAGS="-m32"
-    -DCMAKE_CXX_FLAGS="-m32"
-    -DZ3_DIR=${Z3_32BIT_DIR}
-    -DLLVM_DIR=${LLVM_32BIT_DIR}
-    INSTALL_COMMAND ""
-    BUILD_ALWAYS TRUE)
-
-  ExternalProject_Get_Property(SymRuntime32 BINARY_DIR)
-  set(SYM_RUNTIME_32BIT_DIR ${BINARY_DIR})
 endif()
 
 find_program(CLANG_BINARY "clang"

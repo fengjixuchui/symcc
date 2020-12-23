@@ -81,7 +81,7 @@ void Symbolizer::finalizePHINodes() {
 }
 
 void Symbolizer::shortCircuitExpressionUses() {
-  for (const auto &symbolicComputation : expressionUses) {
+  for (auto &symbolicComputation : expressionUses) {
     assert(!symbolicComputation.inputs.empty() &&
            "Symbolic computation has no inputs");
 
@@ -120,7 +120,7 @@ void Symbolizer::shortCircuitExpressionUses() {
         });
     for (unsigned argIndex = 0; argIndex < symbolicComputation.inputs.size();
          argIndex++) {
-      const auto &argument = symbolicComputation.inputs[argIndex];
+      auto &argument = symbolicComputation.inputs[argIndex];
       auto *originalArgExpression = argument.getSymbolicOperand();
       auto *argCheckBlock = symbolicComputation.firstInstruction->getParent();
 
@@ -157,8 +157,7 @@ void Symbolizer::shortCircuitExpressionUses() {
         finalArgExpression = newArgExpression;
       }
 
-      argument.user->replaceUsesOfWith(originalArgExpression,
-                                       finalArgExpression);
+      argument.replaceOperand(finalArgExpression);
     }
 
     // Finally, the overall result (if the computation produces one) is null
@@ -286,7 +285,8 @@ void Symbolizer::handleIntrinsicCall(CallBase &I) {
     break;
   }
   default:
-    errs() << "Warning: unhandled LLVM intrinsic " << callee->getName() << '\n';
+    errs() << "Warning: unhandled LLVM intrinsic " << callee->getName()
+           << "; the result will be concretized\n";
     break;
   }
 }
@@ -314,7 +314,7 @@ void Symbolizer::handleFunctionCall(CallBase &I, Instruction *returnPoint) {
   IRB.CreateCall(runtime.notifyCall, getTargetPreferredInt(&I));
 
   if (callee == nullptr)
-    tryAlternative(IRB, I.getCalledValue());
+    tryAlternative(IRB, I.getCalledOperand());
 
   for (Use &arg : I.args())
     IRB.CreateCall(runtime.setParameterExpression,
@@ -322,6 +322,14 @@ void Symbolizer::handleFunctionCall(CallBase &I, Instruction *returnPoint) {
                     getSymbolicExpressionOrNull(arg)});
 
   if (!I.user_empty()) {
+    // The result of the function is used somewhere later on. Since we have no
+    // way of knowing whether the function is instrumented (and thus sets a
+    // proper return expression), we have to account for the possibility that
+    // it's not: in that case, we'll have to treat the result as an opaque
+    // concrete value. Therefore, we set the return expression to null here in
+    // order to avoid accidentally using whatever is stored there from the
+    // previous function call. (If the function is instrumented, it will just
+    // override our null with the real expression.)
     IRB.CreateCall(runtime.setReturnExpression,
                    ConstantPointerNull::get(IRB.getInt8PtrTy()));
     IRB.SetInsertPoint(returnPoint);
@@ -333,7 +341,7 @@ void Symbolizer::visitBinaryOperator(BinaryOperator &I) {
   // Binary operators propagate into the symbolic expression.
 
   IRBuilder<> IRB(&I);
-  Value *handler = runtime.binaryOperatorHandlers.at(I.getOpcode());
+  SymFnT handler = runtime.binaryOperatorHandlers.at(I.getOpcode());
 
   // Special case: the run-time library distinguishes between "and" and "or"
   // on Boolean values and bit vectors.
@@ -379,7 +387,7 @@ void Symbolizer::visitCmpInst(CmpInst &I) {
   // simply include either in the resulting expression.
 
   IRBuilder<> IRB(&I);
-  Value *handler = runtime.comparisonHandlers.at(I.getPredicate());
+  SymFnT handler = runtime.comparisonHandlers.at(I.getPredicate());
   assert(handler && "Unable to handle icmp/fcmp variant");
   auto runtimeCall =
       buildRuntimeCall(IRB, handler, {I.getOperand(0), I.getOperand(1)});
@@ -699,7 +707,7 @@ void Symbolizer::visitCastInst(CastInst &I) {
          {IRB.getInt8(I.getDestTy()->getIntegerBitWidth()), false}});
     registerSymbolicComputation(boolToBitConversion, &I);
   } else {
-    Value *target;
+    SymFnT target;
 
     switch (I.getOpcode()) {
     case Instruction::SExt:
@@ -809,7 +817,8 @@ void Symbolizer::visitInstruction(Instruction &I) {
   if (isa<LandingPadInst>(I) || isa<ResumeInst>(I) || isa<InsertValueInst>(I))
     return;
 
-  errs() << "Warning: unknown instruction " << I << '\n';
+  errs() << "Warning: unknown instruction " << I
+         << "; the result will be concretized";
 }
 
 CallInst *Symbolizer::createValueExpression(Value *V, IRBuilder<> &IRB) {
@@ -881,7 +890,7 @@ CallInst *Symbolizer::createValueExpression(Value *V, IRBuilder<> &IRB) {
 }
 
 Symbolizer::SymbolicComputation
-Symbolizer::forceBuildRuntimeCall(IRBuilder<> &IRB, Value *function,
+Symbolizer::forceBuildRuntimeCall(IRBuilder<> &IRB, SymFnT function,
                                   ArrayRef<std::pair<Value *, bool>> args) {
   std::vector<Value *> functionArgs;
   for (const auto &[arg, symbolic] : args) {

@@ -33,9 +33,9 @@ int main(int argc, char* argv[]) {
   // QSYM-COUNT-2: SMT
   // QSYM: New testcase
   if (c == 'a')
-    printf("Correct\n");
+    fprintf(stderr, "Correct\n");
   else
-    printf("Next time...\n");
+    fprintf(stderr, "Next time...\n");
   // ANY: Next time...
   return 0;
 }

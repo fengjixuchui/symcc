@@ -13,13 +13,16 @@
 // SymCC. If not, see <https://www.gnu.org/licenses/>.
 
 // RUN: %symcc -O2 %s -o %t
-// RUN: echo -ne "\x05\x00\x00\x00" | %t 2>&1 | %filecheck %s
+// RUN: echo -ne "\x00\x00\x00\x05" | %t 2>&1 | %filecheck %s
 //
 // Test that global variables are handled correctly. The special challenge is
 // that we need to initialize the symbolic expression corresponding to any
 // global variable that has an initial value.
-#include <stdio.h>
+
 #include <stdint.h>
+#include <stdio.h>
+
+#include <arpa/inet.h>
 #include <unistd.h>
 
 int g_increment = 17;
@@ -43,7 +46,7 @@ void sum(int x) {
         result += g_values[i];
     }
 
-    printf("%s\n", (result < x) ? "foo" : "bar");
+    fprintf(stderr, "%s\n", (result < x) ? "foo" : "bar");
 }
 
 void sum_ints(int x) {
@@ -52,17 +55,18 @@ void sum_ints(int x) {
         result += g_non_char_values[i];
     }
 
-    printf("%s\n", (result < x) ? "foo" : "bar");
+    fprintf(stderr, "%s\n", (result < x) ? "foo" : "bar");
 }
 
 int main(int argc, char* argv[]) {
     int x;
     if (read(STDIN_FILENO, &x, sizeof(x)) != sizeof(x)) {
-        printf("Failed to read x\n");
+        fprintf(stderr, "Failed to read x\n");
         return -1;
     }
+    x = ntohl(x);
 
-    printf("%d\n", increment(x));
+    fprintf(stderr, "%d\n", increment(x));
     // SIMPLE: Trying to solve
     // SIMPLE: (bvadd #x{{0*}}11
     // SIMPLE: Found diverging input
@@ -71,7 +75,7 @@ int main(int argc, char* argv[]) {
     // ANY: 22
 
     g_increment = 18;
-    printf("%d\n", increment(x));
+    fprintf(stderr, "%d\n", increment(x));
     // SIMPLE: Trying to solve
     // SIMPLE: Found diverging input
     // We can't check for 0x12 here because with some versions of clang we end
@@ -81,7 +85,7 @@ int main(int argc, char* argv[]) {
     // ANY: 23
 
     g_uninitialized = 101;
-    printf("%s\n", (x < g_uninitialized) ? "smaller" : "greater or equal");
+    fprintf(stderr, "%s\n", (x < g_uninitialized) ? "smaller" : "greater or equal");
     // SIMPLE: Trying to solve
     // SIMPLE: (bvsle #x{{0*}}65
     // QSYM-COUNT-2: SMT
@@ -96,7 +100,7 @@ int main(int argc, char* argv[]) {
     // QSYM: New testcase
     // ANY: bar
 
-    printf("%s\n", (x < g_more_than_one_byte_int) ? "true" : "false");
+    fprintf(stderr, "%s\n", (x < g_more_than_one_byte_int) ? "true" : "false");
     // SIMPLE: Trying to solve
     // SIMPLE: #x{{0*}}200
     // SIMPLE: Can't find

@@ -99,8 +99,9 @@ program starts to execute.
 
 When execution is finished, the result directory will contain the new test cases
 generated during program execution. Try running the program again on one of
-those or combine it with a fuzzer to automate this process (see
-docs/Fuzzing.txt).
+those (or use [util/pure_concolic_execution.sh](util/pure_concolic_execution.sh)
+to automate the process). For better results, combine SymCC with a fuzzer (see
+[docs/Fuzzing.txt](docs/Fuzzing.txt)).
 
 
 ## Documentation
@@ -175,11 +176,12 @@ To cite SymCC in scientific work, please use the following BibTeX:
   author =       {Sebastian Poeplau and Aurélien Francillon},
   title =        {Symbolic execution with {SymCC}: Don't interpret, compile!},
   booktitle =    {29th {USENIX} Security Symposium ({USENIX} Security 20)},
+  isbn =         {978-1-939133-17-5},
+  pages =        {181--198},
   year =         2020,
-  address =      {Boston, MA},
   url =          {https://www.usenix.org/conference/usenixsecurity20/presentation/poeplau},
   publisher =    {{USENIX} Association},
-  month =        August,
+  month =        aug,
 }
 ```
 

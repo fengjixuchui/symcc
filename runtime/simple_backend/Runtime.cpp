@@ -62,13 +62,13 @@ Z3_solver g_solver; // TODO make thread-local
 // Some global constants for efficiency.
 Z3_ast g_null_pointer, g_true, g_false;
 
-FILE *g_log = stdout;
+FILE *g_log = stderr;
 
 #ifndef NDEBUG
 [[maybe_unused]] void dump_known_regions() {
-  std::cout << "Known regions:" << std::endl;
+  std::cerr << "Known regions:" << std::endl;
   for (const auto &[page, shadow] : g_shadow_pages) {
-    std::cout << "  " << P(page) << " shadowed by " << P(shadow) << std::endl;
+    std::cerr << "  " << P(page) << " shadowed by " << P(shadow) << std::endl;
   }
 }
 
@@ -110,11 +110,15 @@ void _sym_initialize(void) {
     return;
 
 #ifndef NDEBUG
-  std::cout << "Initializing symbolic runtime" << std::endl;
+  std::cerr << "Initializing symbolic runtime" << std::endl;
 #endif
 
   loadConfig();
   initLibcWrappers();
+  std::cerr << "This is SymCC running with the simple backend" << std::endl
+            << "For anything but debugging SymCC itself, you will want to use "
+               "the QSYM backend instead (see README.md for build instructions)"
+            << std::endl;
 
   Z3_config cfg;
 
@@ -145,7 +149,7 @@ void _sym_initialize(void) {
   Z3_inc_ref(g_context, g_false);
 
   if (g_config.logFile.empty()) {
-    g_log = stdout;
+    g_log = stderr;
   } else {
     g_log = fopen(g_config.logFile.c_str(), "w");
   }
@@ -448,7 +452,7 @@ void _sym_push_path_constraint(Z3_ast constraint, int taken,
     Z3_model model = Z3_solver_get_model(g_context, g_solver);
     Z3_model_inc_ref(g_context, model);
     fprintf(g_log, "Found diverging input:\n%s\n",
-           Z3_model_to_string(g_context, model));
+            Z3_model_to_string(g_context, model));
     Z3_model_dec_ref(g_context, model);
   } else {
     fprintf(g_log, "Can't find a diverging input at this point\n");
@@ -531,7 +535,7 @@ void _sym_collect_garbage() {
   auto end = std::chrono::high_resolution_clock::now();
   auto endSize = allocatedExpressions.size();
 
-  std::cout << "After garbage collection: " << endSize
+  std::cerr << "After garbage collection: " << endSize
             << " expressions remain (before: " << startSize << ")" << std::endl
             << "\t(collection took "
             << std::chrono::duration_cast<std::chrono::milliseconds>(end -
