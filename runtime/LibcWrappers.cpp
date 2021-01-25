@@ -264,6 +264,24 @@ int SYM(fseek)(FILE *stream, long offset, int whence) {
   return result;
 }
 
+int SYM(fseeko64)(FILE *stream, uint64_t offset, int whence) {
+  tryAlternative(offset, _sym_get_parameter_expression(1), SYM(fseeko64));
+
+  auto result = fseeko64(stream, offset, whence);
+  _sym_set_return_expression(nullptr);
+  if (result == -1)
+    return result;
+
+  if (fileno(stream) == inputFileDescriptor) {
+    auto pos = ftello64(stream);
+    if (pos == -1)
+      return -1;
+    inputOffset = pos;
+  }
+
+  return result;
+}
+
 int SYM(getc)(FILE *stream) {
   auto result = getc(stream);
   if (result == EOF) {
